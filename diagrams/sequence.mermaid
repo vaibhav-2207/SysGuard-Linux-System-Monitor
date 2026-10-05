@@ -1,0 +1,39 @@
+sequenceDiagram
+    autonumber
+    actor User as User / Terminal
+    participant App as SysGuard C++ App (DriverClient)
+    participant VFS as Linux VFS Subsystem
+    participant Driver as sysguard.ko (/dev/sysguard)
+    participant Kernel as Linux Kernel Core
+
+    User->>App: Launch SysGuard / Query Driver Status
+    App->>VFS: open("/dev/sysguard", O_RDWR)
+    VFS->>Driver: sysguard_open()
+    Driver-->>VFS: Success (fd allocated)
+    VFS-->>App: fd = 3
+
+    Note over App,Driver: IOCTL: Query Driver Status
+    App->>VFS: ioctl(fd, SYSGUARD_IOCTL_GET_STATUS, &status)
+    VFS->>Driver: sysguard_ioctl(SYSGUARD_IOCTL_GET_STATUS)
+    Driver->>Driver: Populate sysguard_status struct
+    Driver->>VFS: copy_to_user(&status, sizeof(status))
+    VFS-->>App: Return 0 (Success)
+
+    Note over App,Driver: IOCTL: Query Kernel Telemetry
+    App->>VFS: ioctl(fd, SYSGUARD_IOCTL_GET_KERNEL_INFO, &kinfo)
+    VFS->>Driver: sysguard_ioctl(SYSGUARD_IOCTL_GET_KERNEL_INFO)
+    Driver->>Kernel: si_meminfo(&si), ktime_get_boottime_seconds()
+    Kernel-->>Driver: Memory stats & boot duration
+    Driver->>VFS: copy_to_user(&kinfo, sizeof(kinfo))
+    VFS-->>App: Return 0 (Success)
+
+    Note over App,Driver: Read Operation
+    App->>VFS: read(fd, buffer, 1024)
+    VFS->>Driver: sysguard_read()
+    Driver->>VFS: copy_to_user(buffer, diagnostic_text)
+    VFS-->>App: Return bytes read
+
+    App->>VFS: close(fd)
+    VFS->>Driver: sysguard_release()
+    Driver-->>VFS: Closed
+    App-->>User: Render formatted metrics on Dashboard

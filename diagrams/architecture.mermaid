@@ -1,0 +1,55 @@
+flowchart TD
+    subgraph UserSpace ["User Space"]
+        UI["SysGuard Interactive Dashboard"]
+        
+        subgraph Monitors ["Monitoring Subsystem (C++)"]
+            M_Sys["SystemInfoMonitor"]
+            M_CPU["CpuMonitor"]
+            M_Mem["MemoryMonitor"]
+            M_Proc["ProcessMonitor"]
+            M_Disk["DiskMonitor"]
+            M_Net["NetworkMonitor"]
+            M_Drv["DriverClient"]
+        end
+
+        UI --> Monitors
+    end
+
+    subgraph OSInterfaces ["Linux Kernel Interfaces"]
+        ProcFS["/proc filesystem (/proc/stat, meminfo, loadavg, PID)"]
+        SysFS["/sys filesystem (/sys/class/net)"]
+        SysCalls["POSIX System Calls (statvfs, uname, sysinfo)"]
+        DevNode["/dev/sysguard (Character Device Node)"]
+    end
+
+    M_Sys --> SysCalls
+    M_Sys --> ProcFS
+    M_CPU --> ProcFS
+    M_Mem --> ProcFS
+    M_Proc --> ProcFS
+    M_Disk --> SysCalls
+    M_Net --> ProcFS
+    M_Net --> SysFS
+    M_Drv -->|"open() / read() / ioctl()"| DevNode
+
+    subgraph KernelSpace ["Kernel Space"]
+        DevNode --> KMod["sysguard.ko (Kernel Module)"]
+        
+        subgraph DriverOps ["file_operations"]
+            FO_Open["sysguard_open()"]
+            FO_Read["sysguard_read()"]
+            FO_Ioctl["sysguard_ioctl()"]
+            FO_Rel["sysguard_release()"]
+        end
+
+        KMod --> DriverOps
+        DriverOps -->|"copy_to_user() / copy_from_user()"| M_Drv
+        DriverOps --> KernelCore["Linux Kernel Core (ktime, si_meminfo, UTS)"]
+    end
+
+    subgraph Hardware ["Hardware Layer"]
+        KernelCore --> HW_CPU["CPU Cores"]
+        KernelCore --> HW_RAM["RAM"]
+        KernelCore --> HW_Storage["Storage Devices"]
+        KernelCore --> HW_NIC["Network Adapters"]
+    end
